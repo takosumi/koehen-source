@@ -155,7 +155,7 @@ version_data = platform.version()
 build_number = int(version_data[version_data.rfind(".") + 1:len(version_data)])
 
 root = Tk()
-root.tk.call("source", path.dirname(sys.argv[0]) + "\\theme\\black.tcl")
+root.tk.call('source', path.dirname(sys.argv[0]) + '\\theme\\black.tcl')
 
 #Windowsがダークモードの時にタイトルバーを黒色にする
 #参考：https://gist.github.com/Olikonsti/879edbf69b801d8519bf25e804cec0aa
@@ -1213,48 +1213,83 @@ class voice_changer:
 
     def device_get(self):
         self.input_api_list = []
-        self.input_api_list.append("デフォルトのAPI")
         self.input_api_index_list = []
         self.input_device_list = []
         self.input_device_index_list = []
         self.output_device_list = []
         self.output_device_index_list = []
-        self.input_device_display_list = ["デフォルトの入力デバイス"]
-        self.input_device_index_current = [self.audio.get_default_input_device_info()["index"]]
-        self.output_device_display_list = ["デフォルトの出力デバイス"]
-        self.output_device_index_current = [self.audio.get_default_output_device_info()["index"]]
+        try:
+            self.input_api_index_list.append(self.audio.get_default_host_api_info()["index"])
+            self.input_api_list.append("デフォルトのAPI")
+        except Exception:
+            self.input_api_index_list.append(-1)
+            self.input_api_list.append("(デフォルトのAPIなし)")
+        try:
+            self.input_device_index_list.append(self.audio.get_default_input_device_info()["index"])
+            self.input_device_list.append("デフォルトの入力デバイス")
+            self.input_device_index_current = [self.audio.get_default_input_device_info()["index"]]
+            self.input_device_display_list = ["デフォルトの入力デバイス"]
+        except Exception:
+            self.input_device_index_list.append(-1)
+            self.input_device_list.append("(デフォルトのデバイスなし)")
+            self.input_device_index_current = [-1]
+            self.input_device_display_list = ["(デフォルトのデバイスなし)"]
+        try:
+            self.output_device_index_list.append(self.audio.get_default_output_device_info()["index"])
+            self.output_device_list.append("デフォルトの出力デバイス")
+            self.output_device_index_current = [self.audio.get_default_output_device_info()["index"]]
+            self.output_device_display_list = ["デフォルトの出力デバイス"]
+        except Exception:
+            self.output_device_index_list.append(-1)
+            self.output_device_list.append("(デフォルトのデバイスなし)")
+            self.output_device_index_current = [-1]
+            self.output_device_display_list = ["(デフォルトのデバイスなし)"]
         self.cut_pos_input = []
         self.cut_pos_output = []
         self.cut_pos_input.append(0)
         self.cut_pos_output.append(0)
-        self.num_cut_pos_input = 0
-        self.num_cut_pos_output = 0
+        self.cut_pos_input.append(1)
+        self.cut_pos_output.append(1)
+        self.num_cut_pos_input = 1
+        self.num_cut_pos_output = 1
         for j in range(self.audio.get_host_api_count()):
             self.num_input_device = 0
             self.num_output_device = 0
             for k in range(self.audio.get_host_api_info_by_index(j)["deviceCount"]):
                 if self.audio.get_device_info_by_host_api_device_index(j, k)["maxInputChannels"] != 0:
                     self.num_input_device = self.num_input_device + 1
-                    self.input_device_list.append(self.audio.get_device_info_by_host_api_device_index(j, k)["name"])
-                    self.input_device_index_list.append(self.audio.get_device_info_by_host_api_device_index(j, k)["index"])
                 if self.audio.get_device_info_by_host_api_device_index(j, k)["maxOutputChannels"] != 0:
                     self.num_output_device = self.num_output_device + 1
-                    self.output_device_list.append(self.audio.get_device_info_by_host_api_device_index(j, k)["name"])
-                    self.output_device_index_list.append(self.audio.get_device_info_by_host_api_device_index(j, k)["index"])
-            self.num_cut_pos_input = self.num_cut_pos_input + self.num_input_device
-            self.num_cut_pos_output = self.num_cut_pos_output + self.num_output_device
-            self.cut_pos_input.append(self.num_cut_pos_input)
-            self.cut_pos_output.append(self.num_cut_pos_output)
             if self.num_input_device != 0 and self.num_output_device != 0:
+                for k in range(self.audio.get_host_api_info_by_index(j)["deviceCount"]):
+                    if self.audio.get_device_info_by_host_api_device_index(j, k)["maxInputChannels"] != 0:
+                        self.input_device_list.append(self.audio.get_device_info_by_host_api_device_index(j, k)["name"])
+                        self.input_device_index_list.append(self.audio.get_device_info_by_host_api_device_index(j, k)["index"])
+                    if self.audio.get_device_info_by_host_api_device_index(j, k)["maxOutputChannels"] != 0:
+                        self.output_device_list.append(self.audio.get_device_info_by_host_api_device_index(j, k)["name"])
+                        self.output_device_index_list.append(self.audio.get_device_info_by_host_api_device_index(j, k)["index"])
                 self.input_api_list.append(self.audio.get_host_api_info_by_index(j)["name"])
                 self.input_api_index_list.append(self.audio.get_host_api_info_by_index(j)["index"])
-            if self.audio.get_host_api_info_by_index(j)["index"] == self.audio.get_default_host_api_info()["index"]:
-                self.input_api_index_list.insert(0, self.audio.get_default_host_api_info()["index"])
+                self.num_cut_pos_input = self.num_cut_pos_input + self.num_input_device
+                self.num_cut_pos_output = self.num_cut_pos_output + self.num_output_device
+                self.cut_pos_input.append(self.num_cut_pos_input)
+                self.cut_pos_output.append(self.num_cut_pos_output)
 
     def device_get2(self):
         self.device_get()
         self.input_api_select.current(0)
         self.input_device_label_change(0)
+
+    def input_device_label_change(self, event):
+        self.b = self.input_api_select.current()
+        self.input_device_display_list = self.input_device_list[self.cut_pos_input[self.b]:self.cut_pos_input[self.b + 1]]
+        self.input_device_index_current = self.input_device_index_list[self.cut_pos_input[self.b]:self.cut_pos_input[self.b + 1]]
+        self.output_device_display_list = self.output_device_list[self.cut_pos_output[self.b]:self.cut_pos_output[self.b + 1]]
+        self.output_device_index_current = self.output_device_index_list[self.cut_pos_output[self.b]:self.cut_pos_output[self.b + 1]]
+        self.input_device_select["values"] = self.input_device_display_list
+        self.input_device_select.current(0)
+        self.output_device_select["values"] = self.output_device_display_list
+        self.output_device_select.current(0)
 
     def mode_change(self):
         global style
@@ -1320,23 +1355,6 @@ class voice_changer:
         self.input_channel_menu.grid(column = 1, row = 2, sticky = (W))
         self.input_channel_menu.current(self.bak3[6])
 
-    def input_device_label_change(self, event):
-        self.b = self.input_api_select.current()
-        if self.b == 0:
-            self.input_device_display_list = ["デフォルトの入力デバイス"]
-            self.input_device_index_current = [self.audio.get_default_input_device_info()["index"]]
-            self.output_device_display_list = ["デフォルトの出力デバイス"]
-            self.output_device_index_current = [self.audio.get_default_output_device_info()["index"]]
-        else:
-            self.input_device_display_list = self.input_device_list[self.cut_pos_input[self.input_api_index_list[self.b]]:self.cut_pos_input[self.input_api_index_list[self.b] + 1]]
-            self.input_device_index_current = self.input_device_index_list[self.cut_pos_input[self.input_api_index_list[self.b]]:self.cut_pos_input[self.input_api_index_list[self.b] + 1]]
-            self.output_device_display_list = self.output_device_list[self.cut_pos_output[self.input_api_index_list[self.b]]:self.cut_pos_output[self.input_api_index_list[self.b] + 1]]
-            self.output_device_index_current = self.output_device_index_list[self.cut_pos_output[self.input_api_index_list[self.b]]:self.cut_pos_output[self.input_api_index_list[self.b] + 1]]
-        self.input_device_select["values"] = self.input_device_display_list
-        self.input_device_select.current(0)
-        self.output_device_select["values"] = self.output_device_display_list
-        self.output_device_select.current(0)
-
     def voice_change(self):
         if self.rightwindow1.var1.get() != "現在の変換データ：(データなし)" and self.rightwindow2.var1.get() != "現在の変換データ：(データなし)":
             self.mode_change_button.state(["disabled"])
@@ -1357,6 +1375,10 @@ class voice_changer:
                 log_insert("[エラー] 変換先話者の変換データがありません。")
 
     def voice_change2(self):
+        if self.input_api_list[self.input_api_select.current()] == "(デフォルトのAPIなし)" or self.input_device_display_list[self.input_device_select.current()] == "(デフォルトのデバイスなし)" or self.output_device_display_list[self.output_device_select.current()] == "(デフォルトのデバイスなし)":
+            log_insert("[エラー] 有効なデバイスがありません。")
+            self.mode_change_button.state(["!disabled"])
+            return 1
         if self.flag == 0:
             self.flag = 1
             self.button_text1.set("変換停止")
@@ -1389,36 +1411,27 @@ class voice_changer:
                             log_insert("[エラー] 現在の周波数(" + str(self.sample_rate_menu.num) + "Hz)がOS側の周波数の設定と異なっています。\nコントロールパネル>ハードウェアとサウンド>サウンドからデバイスのプロパティを開き、周波数の設定を変更してください。")
                         else:
                             log_insert("[エラー] 出力デバイスが現在の音声形式(" + str(self.sample_rate_menu.num) + "Hz/16bit/" + self.entry_text4.get() + "チャンネル)に対応していません。")
-                        self.flag = 0
-                        self.button_text1.set("変換開始")
-                        self.audio.terminate()
-                        self.input_api_select.state(["!disabled"])
-                        self.input_device_select.state(["!disabled"])
-                        self.output_device_select.state(["!disabled"])
-                        self.device_update.state(["!disabled"])
+                        self.voice_change3()
             except ValueError as e:
                 if e.args[0] == "Invalid sample rate":
                     log_insert("[エラー] 現在の周波数(" + str(self.sample_rate_menu.num) + "Hz)がOS側の周波数の設定と異なっています。\nコントロールパネル>ハードウェアとサウンド>サウンドからデバイスのプロパティを開き、周波数の設定を変更してください。")
                 else:
                     log_insert("[エラー] 入力デバイスが現在の音声形式(" + str(self.sample_rate_menu.num) + "Hz/16bit/" + self.entry_text4.get() + "チャンネル)に対応していません。")
-                self.flag = 0
-                self.button_text1.set("変換開始")
-                self.audio.terminate()
-                self.input_api_select.state(["!disabled"])
-                self.input_device_select.state(["!disabled"])
-                self.output_device_select.state(["!disabled"])
-                self.device_update.state(["!disabled"])
+                self.voice_change3()
         elif self.flag == 1:
-            self.flag = 0
-            self.button_text1.set("変換開始")
             self.stream.stop_stream()
             self.stream.close()
-            self.audio.terminate()
-            self.input_api_select.state(["!disabled"])
-            self.input_device_select.state(["!disabled"])
-            self.output_device_select.state(["!disabled"])
-            self.device_update.state(["!disabled"])
-            self.mode_change_button.state(["!disabled"])
+            self.voice_change3()
+
+    def voice_change3(self):
+        self.flag = 0
+        self.button_text1.set("変換開始")
+        self.audio.terminate()
+        self.input_api_select.state(["!disabled"])
+        self.input_device_select.state(["!disabled"])
+        self.output_device_select.state(["!disabled"])
+        self.device_update.state(["!disabled"])
+        self.mode_change_button.state(["!disabled"])
 
     def callback(self, in_data, frame_count, time_info, status):
         if self.entry_text4.get() == "2":
