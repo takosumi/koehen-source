@@ -1221,29 +1221,35 @@ class voice_changer:
         try:
             self.input_api_index_list.append(self.audio.get_default_host_api_info()["index"])
             self.input_api_list.append("デフォルトのAPI")
+            self.entry_text3.set("デフォルトのAPI")
         except Exception:
             self.input_api_index_list.append(-1)
             self.input_api_list.append("(デフォルトのAPIなし)")
+            self.entry_text3.set("(デフォルトのAPIなし)")
         try:
             self.input_device_index_list.append(self.audio.get_default_input_device_info()["index"])
             self.input_device_list.append("デフォルトの入力デバイス")
             self.input_device_index_current = [self.audio.get_default_input_device_info()["index"]]
             self.input_device_display_list = ["デフォルトの入力デバイス"]
+            self.entry_text1.set("デフォルトの入力デバイス")
         except Exception:
             self.input_device_index_list.append(-1)
             self.input_device_list.append("(デフォルトのデバイスなし)")
             self.input_device_index_current = [-1]
             self.input_device_display_list = ["(デフォルトのデバイスなし)"]
+            self.entry_text1.set("(デフォルトのデバイスなし)")
         try:
             self.output_device_index_list.append(self.audio.get_default_output_device_info()["index"])
             self.output_device_list.append("デフォルトの出力デバイス")
             self.output_device_index_current = [self.audio.get_default_output_device_info()["index"]]
             self.output_device_display_list = ["デフォルトの出力デバイス"]
+            self.entry_text2.set("デフォルトの出力デバイス")
         except Exception:
             self.output_device_index_list.append(-1)
             self.output_device_list.append("(デフォルトのデバイスなし)")
             self.output_device_index_current = [-1]
             self.output_device_display_list = ["(デフォルトのデバイスなし)"]
+            self.entry_text2.set("(デフォルトのデバイスなし)")
         self.cut_pos_input = []
         self.cut_pos_output = []
         self.cut_pos_input.append(0)
