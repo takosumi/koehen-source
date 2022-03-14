@@ -1059,10 +1059,12 @@ class frequency_transfer_octave:
 
     def update(self, *args):
         self.a = self.var.get()
-        if self.a.isdecimal():
+        try:
             self.num = int(self.a)
             if self.num < self.bottom_num:
                 self.num = self.bottom_num
+        except ValueError:
+            pass
 
     def display_update(self, event):
         self.var.set(self.num)
