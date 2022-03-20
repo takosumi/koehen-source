@@ -1442,25 +1442,30 @@ class voice_changer:
         self.mode_change_button.state(["!disabled"])
 
     def callback(self, in_data, frame_count, time_info, status):
-        if self.entry_text4.get() == "2":
-            self.spec_mat_l, self.aperiod_mat_l, self.f0_l = self.voice_convert(np.ascontiguousarray(np.frombuffer(in_data, dtype = "int16").astype(np.float64)[::2]/32768.0))
-            self.new_f0_l = self.freq_convert(self.f0_l)
-            if not(type(self.new_f0_l) is int):
+        try:
+            if self.entry_text4.get() == "2":
+                self.spec_mat_l, self.aperiod_mat_l, self.f0_l = self.voice_convert(np.ascontiguousarray(np.frombuffer(in_data, dtype = "int16").astype(np.float64)[::2]/32768.0))
+                self.new_f0_l = self.freq_convert(self.f0_l)
                 self.out_data_l = pw.synthesize(self.new_f0_l, self.spec_mat_l, self.aperiod_mat_l, self.sample_rate_menu.num)
                 self.spec_mat_r, self.aperiod_mat_r, self.f0_r = self.voice_convert(np.ascontiguousarray(np.frombuffer(in_data, dtype = "int16").astype(np.float64)[1::2]/32768.0))
                 self.new_f0_r = self.freq_convert(self.f0_r)
-                if not(type(self.new_f0_r) is int):
-                    self.out_data_r = pw.synthesize(self.new_f0_r, self.spec_mat_r, self.aperiod_mat_r, self.sample_rate_menu.num)
-                    self.out_data = np.empty(len(self.out_data_l) + len(self.out_data_r), dtype = "float64")
-                    self.out_data[::2] = self.out_data_l * 32768.0 * self.volume_menu.num
-                    self.out_data[1::2] = self.out_data_r * 32768.0 * self.volume_menu.num
-                    return (self.out_data.astype(np.int16).tobytes(), pyaudio.paContinue)
-        else:
-            self.spec_mat, self.aperiod_mat, self.f0 = self.voice_convert(np.frombuffer(in_data, dtype = "int16").astype(np.float64)/32768.0)
-            self.new_f0 = self.freq_convert(self.f0)
-            if not(type(self.new_f0) is int):
+                self.out_data_r = pw.synthesize(self.new_f0_r, self.spec_mat_r, self.aperiod_mat_r, self.sample_rate_menu.num)
+                self.out_data = np.empty(len(self.out_data_l) + len(self.out_data_r), dtype = "float64")
+                self.out_data[::2] = self.out_data_l * 32768.0 * self.volume_menu.num
+                self.out_data[1::2] = self.out_data_r * 32768.0 * self.volume_menu.num
+                return (self.out_data.astype(np.int16).tobytes(), pyaudio.paContinue)
+            else:
+                self.spec_mat, self.aperiod_mat, self.f0 = self.voice_convert(np.frombuffer(in_data, dtype = "int16").astype(np.float64)/32768.0)
+                self.new_f0 = self.freq_convert(self.f0)
                 self.out_data = pw.synthesize(self.new_f0, self.spec_mat, self.aperiod_mat, self.sample_rate_menu.num) * 32768.0 * self.volume_menu.num
                 return (self.out_data.astype(np.int16).tobytes(), pyaudio.paContinue)
+        except Exception:
+            self.voice_change3()
+            log_insert("[info] エラーが発生したため、変換を中断しました。")
+            if self.entry_text4.get() == "2":
+                return (np.array([0] * self.frame_length * 2).astype(np.int16).tobytes(), pyaudio.paAbort)
+            else:
+                return (np.array([0] * self.frame_length).astype(np.int16).tobytes(), pyaudio.paAbort)
 
     def file_change(self):
         if self.rightwindow1.var1.get() != "現在の変換データ：(データなし)" and self.rightwindow2.var1.get() != "現在の変換データ：(データなし)":
@@ -1489,46 +1494,36 @@ class voice_changer:
 
     def run(self):
         self.volume_menu.entry.state(["disabled"])
-        if self.file_open_button.n_channel == 1:
-            self.spec_mat, self.aperiod_mat, self.f0 = self.voice_convert(self.file_open_button.signal_l)
-            self.new_f0 = self.freq_convert(self.f0)
-            if not(type(self.new_f0) is int):
-                self.out_data = pw.synthesize(self.new_f0, self.spec_mat, self.aperiod_mat, self.file_open_button.framerate) * 32768.0 * self.volume_menu.num
-            else:
-                self.volume_menu.entry.state(["!disabled"])
-                self.mode_change_button.state(["!disabled"])
-                return 1
-        elif self.file_open_button.n_channel == 2:
-            self.spec_mat_l, self.aperiod_mat_l, self.f0_l = self.voice_convert(self.file_open_button.signal_l)
-            self.new_f0_l = self.freq_convert(self.f0_l)
-            if not(type(self.new_f0_l) is int):
-                self.out_data_l = pw.synthesize(self.new_f0_l, self.spec_mat_l, self.aperiod_mat_l, self.file_open_button.framerate) * 32768.0 * self.volume_menu.num
+        try:
+            if self.file_open_button.n_channel == 1:
+                self.spec_mat, self.aperiod_mat, self.f0 = self.voice_convert(self.file_open_button.signal_l)
+                self.new_f0 = self.freq_convert(self.f0)
+                self.out_data = pw.synthesize(self.new_f0, self.spec_mat, self.aperiod_mat, self.sample_rate_menu.num) * 32768.0 * self.volume_menu.num
+            elif self.file_open_button.n_channel == 2:
+                self.spec_mat_l, self.aperiod_mat_l, self.f0_l = self.voice_convert(self.file_open_button.signal_l)
+                self.new_f0_l = self.freq_convert(self.f0_l)
+                self.out_data_l = pw.synthesize(self.new_f0_l, self.spec_mat_l, self.aperiod_mat_l, self.sample_rate_menu.num) * 32768.0 * self.volume_menu.num
                 self.spec_mat_r, self.aperiod_mat_r, self.f0_r = self.voice_convert(self.file_open_button.signal_r)
                 self.new_f0_r = self.freq_convert(self.f0_r)
-                if not(type(self.new_f0_r) is int):
-                    self.out_data_r = pw.synthesize(self.new_f0_r, self.spec_mat_r, self.aperiod_mat_r, self.file_open_button.framerate) * 32768.0 * self.volume_menu.num
-                    self.out_data = np.empty(len(self.out_data_l) + len(self.out_data_r), dtype = "float64")
-                    self.out_data[::2] = self.out_data_l
-                    self.out_data[1::2] = self.out_data_r
-                else:
-                    self.volume_menu.entry.state(["!disabled"])
-                    self.mode_change_button.state(["!disabled"])
-                    return 1
-            else:
+                self.out_data_r = pw.synthesize(self.new_f0_r, self.spec_mat_r, self.aperiod_mat_r, self.sample_rate_menu.num) * 32768.0 * self.volume_menu.num
+                self.out_data = np.empty(len(self.out_data_l) + len(self.out_data_r), dtype = "float64")
+                self.out_data[::2] = self.out_data_l
+                self.out_data[1::2] = self.out_data_r
+            try:
+                self.f = wave.open(self.filename, "wb")
+                self.f.setnchannels(self.file_open_button.n_channel)
+                self.f.setsampwidth(2)
+                self.f.setframerate(self.sample_rate_menu.num)
+                self.f.writeframes(self.out_data.astype(np.int16).tobytes())
+                self.f.close()
+                log_insert("変換が完了しました。ファイルのパスは" + self.filename + "です。")
+            except Exception:
+                log_insert("ファイル" + self.filename + "を上書きできません。\n他のプログラムが使用中の可能性があります。")
+            finally:
                 self.volume_menu.entry.state(["!disabled"])
                 self.mode_change_button.state(["!disabled"])
-                return 1
-        try:
-            self.f = wave.open(self.filename, "wb")
-            self.f.setnchannels(self.file_open_button.n_channel)
-            self.f.setsampwidth(2)
-            self.f.setframerate(self.sample_rate_menu.num)
-            self.f.writeframes(self.out_data.astype(np.int16).tobytes())
-            self.f.close()
-            log_insert("変換が完了しました。ファイルのパスは" + self.filename + "です。")
-        except (AttributeError, PermissionError):
-            log_insert("ファイル" + self.filename + "を上書きできません。\n他のプログラムが使用中の可能性があります。")
-        finally:
+        except Exception:
+            log_insert("[info] エラーが発生したため、変換を中断しました。")
             self.volume_menu.entry.state(["!disabled"])
             self.mode_change_button.state(["!disabled"])
 
@@ -1685,6 +1680,7 @@ if path.isfile(path.dirname(sys.argv[0]) + "\\" + "Latest.json"):
             app.rightwindow2.estimated_spec = load_data["estimated_spec"]
             if load_data["file_for_convert"] != "":
                 if path.isfile(load_data["file_for_convert"]):
+                    app.file_open_button.file_path = load_data["file_for_convert"]
                     app.file_open_button.file_read1(load_data["file_for_convert"])
                 else:
                     log_insert("[警告] ファイル" + load_data["file_for_convert"] + "が見つかりませんでした。")
