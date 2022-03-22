@@ -329,11 +329,11 @@ class log:
         self.logarea = Text(mainframe, height = 10)
         self.ys = ttk.Scrollbar(mainframe, orient = "vertical", command = self.logarea.yview)
         self.logarea["yscrollcommand"] = self.ys.set
-        self.logarea.insert("1.0", "汎用声質変換ソフト「こえへん！」Ver.beta1\n(C)Takosumi 2022\nここにログが表示されます。")
+        self.logarea.insert("1.0", "汎用声質変換ソフト「こえへん！」Ver.beta2\n(C)Takosumi 2022\nここにログが表示されます。")
         self.logarea["state"] = "disabled"
 
 class rightwindow:
-    def __init__(self, mainframe, a, sample_rate):
+    def __init__(self, mainframe, a):
         self.var1 = StringVar()
         self.var1.set("現在の変換データ：(データなし)")
         self.border = ""
@@ -384,7 +384,7 @@ class rightwindow:
         self.record_button = ttk.Button(self.subframe, text = "ファイル名保存", command = self.record, width = "12")
         self.record_button.state(["disabled"])
         self.record_button.grid(column = 2, row = 6)
-        self.division_button = ttk.Button(self.subframe, text = "分割位置推定", command = lambda:self.division_estimate(sample_rate), width = "12")
+        self.division_button = ttk.Button(self.subframe, text = "分割位置推定", command = self.division_estimate, width = "12")
         self.division_button.state(["disabled"])
         self.division_button.grid(column = 1, row = 7)
         self.edit_button = ttk.Button(self.subframe, text = "手動補正", command = lambda:self.open_editor_window(mainframe), width = "12")
@@ -405,9 +405,9 @@ class rightwindow:
             self.division_button.state(["!disabled"])
             self.record_button.state(["!disabled"])
 
-    def division_estimate(self, sample_rate):
+    def division_estimate(self):
         if self.button.button1.framerate == self.button.button2.framerate == self.button.button3.framerate == self.button.button4.framerate == self.button.button5.framerate:
-            self.border, self.average, self.a, self.i, self.u, self.e, self.o = uv.estimate_division_pos(self.button.button1.signal, self.button.button2.signal, self.button.button3.signal, self.button.button4.signal, self.button.button5.signal, sample_rate)
+            self.border, self.average, self.a, self.i, self.u, self.e, self.o = uv.estimate_division_pos(self.button.button1.signal, self.button.button2.signal, self.button.button3.signal, self.button.button4.signal, self.button.button5.signal, self.button.button1.framerate)
             self.average_final = self.average
             self.border_final = self.border
             self.a_final = self.a
@@ -537,8 +537,8 @@ class rightwindow:
                 log_insert("ファイル" + self.filename + "を上書きできません。\n他のプログラムが使用中の可能性があります。")
 
 class rightwindow2(rightwindow):
-    def __init__(self, mainframe, a, sample_rate):
-        super().__init__(mainframe, a, sample_rate)
+    def __init__(self, mainframe, a):
+        super().__init__(mainframe, a)
         self.secondframe = ttk.Frame(mainframe)
         self.secondframe.grid(column = a, row = 1, sticky = (N, W, E, S))
         self.original_border = [33, 45, 88, 125, 185, 215, 245, 310]
@@ -915,15 +915,15 @@ class sample_rate_menu:
     def display_update(self, event):
         self.var.set(self.num)
 
-class aperiodicity_transfer_menu:
+class high_freq_transfer_menu:
     def __init__(self, mainframe):
         self.var = StringVar()
-        self.var.set(0.60)
-        self.num = 0.60
-        self.bottom_num = 0.10
+        self.var.set(0.20)
+        self.num = 0.20
+        self.bottom_num = 0.00
         self.top_num = 1.00
         self.entry = ttk.Spinbox(mainframe, from_ = self.bottom_num, to = self.top_num, increment = 0.01, textvariable = self.var, width = 12)
-        self.label = ttk.Label(mainframe, text = "非周期指標の変換係数")
+        self.label = ttk.Label(mainframe, text = "高音域の変換係数")
         self.label.grid(column = 0, row = 0)
         self.entry.grid(column = 1, row = 0)
         self.entry.bind("<FocusOut>", self.display_update)
@@ -1081,11 +1081,8 @@ class voice_changer:
         self.button_text3 = StringVar()
         self.button_text3.set("ダークモード")
         self.entry_text1 = StringVar()
-        self.entry_text1.set("デフォルトの入力デバイス")
         self.entry_text2 = StringVar()
-        self.entry_text2.set("デフォルトの出力デバイス")
         self.entry_text3 = StringVar()
-        self.entry_text3.set("デフォルトのAPI")
         self.entry_text4 = StringVar()
         self.entry_text4.set("1")
         self.save_mode = IntVar()
@@ -1159,7 +1156,7 @@ class voice_changer:
 
         self.topframe2 = ttk.Frame(root, padding = "3")
         self.topframe2.grid(column = 0, row = 3, sticky = (N, W, E, S))
-        self.aperiod_menu = aperiodicity_transfer_menu(self.topframe2)
+        self.high_freq_menu = high_freq_transfer_menu(self.topframe2)
         self.volume_menu = volume_menu(self.topframe2)
 
         self.topframe3 = ttk.Frame(root, padding = "3")
@@ -1187,8 +1184,8 @@ class voice_changer:
         self.label_title_rightcolumn = ttk.Label(self.rightframe, text = "変換先話者")
         self.label_title_leftcolumn.grid(column = 0, row = 0)
         self.label_title_rightcolumn.grid(column = 0, row = 0)
-        self.rightwindow1 = rightwindow(self.leftframe, 0, self.sample_rate_menu.num)
-        self.rightwindow2 = rightwindow2(self.rightframe, 0, self.sample_rate_menu.num)
+        self.rightwindow1 = rightwindow(self.leftframe, 0)
+        self.rightwindow2 = rightwindow2(self.rightframe, 0)
 
         self.leftframe.columnconfigure(0, weight = 1)
         self.rightframe.columnconfigure(0, weight = 1)
@@ -1469,7 +1466,6 @@ class voice_changer:
 
     def file_change(self):
         if self.rightwindow1.var1.get() != "現在の変換データ：(データなし)" and self.rightwindow2.var1.get() != "現在の変換データ：(データなし)":
-            self.mode_change_button.state(["disabled"])
             if self.rightwindow2.var1.get() == "現在の変換データ：人工的に作成":
                 if self.rightwindow1.framerate == self.sample_rate_menu.num == self.file_open_button.framerate:
                     self.filename = filedialog.asksaveasfilename(title = "保存", filetypes = [("Wave", ".wav")], defaultextension = "wav")
@@ -1493,19 +1489,20 @@ class voice_changer:
                 log_insert("[エラー] 変換先話者の変換データがありません。")
 
     def run(self):
+        self.mode_change_button.state(["disabled"])
         self.volume_menu.entry.state(["disabled"])
         try:
             if self.file_open_button.n_channel == 1:
                 self.spec_mat, self.aperiod_mat, self.f0 = self.voice_convert(self.file_open_button.signal_l)
                 self.new_f0 = self.freq_convert(self.f0)
-                self.out_data = pw.synthesize(self.new_f0, self.spec_mat, self.aperiod_mat, self.sample_rate_menu.num) * 32768.0 * self.volume_menu.num
+                self.out_data = pw.synthesize(self.new_f0, self.spec_mat, self.aperiod_mat, self.file_open_button.framerate) * 32768.0 * self.volume_menu.num
             elif self.file_open_button.n_channel == 2:
                 self.spec_mat_l, self.aperiod_mat_l, self.f0_l = self.voice_convert(self.file_open_button.signal_l)
                 self.new_f0_l = self.freq_convert(self.f0_l)
-                self.out_data_l = pw.synthesize(self.new_f0_l, self.spec_mat_l, self.aperiod_mat_l, self.sample_rate_menu.num) * 32768.0 * self.volume_menu.num
+                self.out_data_l = pw.synthesize(self.new_f0_l, self.spec_mat_l, self.aperiod_mat_l, self.file_open_button.framerate) * 32768.0 * self.volume_menu.num
                 self.spec_mat_r, self.aperiod_mat_r, self.f0_r = self.voice_convert(self.file_open_button.signal_r)
                 self.new_f0_r = self.freq_convert(self.f0_r)
-                self.out_data_r = pw.synthesize(self.new_f0_r, self.spec_mat_r, self.aperiod_mat_r, self.sample_rate_menu.num) * 32768.0 * self.volume_menu.num
+                self.out_data_r = pw.synthesize(self.new_f0_r, self.spec_mat_r, self.aperiod_mat_r, self.file_open_button.framerate) * 32768.0 * self.volume_menu.num
                 self.out_data = np.empty(len(self.out_data_l) + len(self.out_data_r), dtype = "float64")
                 self.out_data[::2] = self.out_data_l
                 self.out_data[1::2] = self.out_data_r
@@ -1513,7 +1510,7 @@ class voice_changer:
                 self.f = wave.open(self.filename, "wb")
                 self.f.setnchannels(self.file_open_button.n_channel)
                 self.f.setsampwidth(2)
-                self.f.setframerate(self.sample_rate_menu.num)
+                self.f.setframerate(self.file_open_button.framerate)
                 self.f.writeframes(self.out_data.astype(np.int16).tobytes())
                 self.f.close()
                 log_insert("変換が完了しました。ファイルのパスは" + self.filename + "です。")
@@ -1529,9 +1526,9 @@ class voice_changer:
 
     def voice_convert(self, a):
             if self.rightwindow2.var1.get() == "現在の変換データ：人工的に作成":
-                self.result = uv.voice_convert(a, self.rightwindow1.average_final, self.rightwindow1.border_final, self.rightwindow2.estimated_spec, self.rightwindow2.original_border, self.sample_rate_menu.num, self.aperiod_menu.num)
+                self.result = uv.voice_convert(a, self.rightwindow1.average_final, self.rightwindow1.border_final, self.rightwindow2.estimated_spec, self.rightwindow2.original_border, self.sample_rate_menu.num, self.high_freq_menu.num)
             else:
-                self.result = uv.voice_convert(a, self.rightwindow1.average_final, self.rightwindow1.border_final, self.rightwindow2.a_final, self.rightwindow2.border_final, self.sample_rate_menu.num, self.aperiod_menu.num)
+                self.result = uv.voice_convert(a, self.rightwindow1.average_final, self.rightwindow1.border_final, self.rightwindow2.a_final, self.rightwindow2.border_final, self.sample_rate_menu.num, self.high_freq_menu.num)
             return self.result
 
     def frame_change(self, event):
@@ -1582,7 +1579,7 @@ class voice_changer:
             return np.array(self.new_a)
         else:
             log_insert("[エラー] 変換後の基本周波数がマイナスになりました。\n変換係数を変更してもう一度試してください。")
-            return 1
+            raise Exception("Freq convert error")
 
     def button_update(self, *args):
         self.file_convert_button.state(["!disabled"])
@@ -1624,7 +1621,7 @@ class voice_changer:
         self.save_data.update(right_parameter_file = self.rightwindow2.file_path)
         self.save_data.update(file_for_convert = self.file_open_button.file_path)
         self.save_data.update(sample_rate = self.sample_rate_menu.num)
-        self.save_data.update(aperiodicity_transfer_rate = self.aperiod_menu.num)
+        self.save_data.update(aperiodicity_transfer_rate = self.high_freq_menu.num)
         self.save_data.update(volume = self.volume_menu.num)
         self.save_data.update(frequency_transfer_parameter_1 = self.freq_transfer_linear.num1)
         self.save_data.update(frequency_transfer_parameter_2 = self.freq_transfer_linear.num2)
@@ -1652,8 +1649,8 @@ if path.isfile(path.dirname(sys.argv[0]) + "\\" + "Latest.json"):
             load_data = json.load(f)
             app.sample_rate_menu.num = load_data["sample_rate"]
             app.sample_rate_menu.var.set(load_data["sample_rate"])
-            app.aperiod_menu.num = load_data["aperiodicity_transfer_rate"]
-            app.aperiod_menu.var.set(load_data["aperiodicity_transfer_rate"])
+            app.high_freq_menu.num = load_data["aperiodicity_transfer_rate"]
+            app.high_freq_menu.var.set(load_data["aperiodicity_transfer_rate"])
             app.volume_menu.num = load_data["volume"]
             app.volume_menu.var.set(load_data["volume"])
             app.freq_transfer_linear.num1 = load_data["frequency_transfer_parameter_1"]
@@ -1685,7 +1682,7 @@ if path.isfile(path.dirname(sys.argv[0]) + "\\" + "Latest.json"):
                 else:
                     log_insert("[警告] ファイル" + load_data["file_for_convert"] + "が見つかりませんでした。")
         except (TypeError, KeyError):
-            log_insert("[警告] データ形式が誤っています。")
+            log_insert("[警告] 前回終了した時のデータの読み込みに失敗しました。")
 else:
     log_insert("[警告] 前回終了した時のデータが見つかりません。(この警告は、初回起動時にも表示されます)")
 
