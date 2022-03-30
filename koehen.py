@@ -18,6 +18,8 @@ import winreg
 import ctypes as ct
 import struct
 from PIL import Image, ImageTk
+import time
+import queue
 
 from matplotlib import cbook
 from matplotlib.figure import Figure
@@ -312,14 +314,15 @@ class ToolTip:
 def log_insert(text):
     app.log.logarea["state"] = "normal"
     app.log.logarea.insert("end", "\n" + text)
+    app.log.logarea.see("end")
     app.log.logarea["state"] = "disabled"
 
 def gaussian(a, x, c, s):
     return a * np.exp(-((x - c) ** 2)/(2 * (s ** 2)))
 
-def original_spectrum(a, c, s):
-    i = [0] * 513
-    for k in range(513):
+def original_spectrum(a, c, s, l):
+    i = [0] * l
+    for k in range(l):
         for j in range(len(c)):
             i[k] = i[k] + gaussian(a[j], k, c[j], s[j])
     return i
@@ -329,7 +332,7 @@ class log:
         self.logarea = Text(mainframe, height = 10)
         self.ys = ttk.Scrollbar(mainframe, orient = "vertical", command = self.logarea.yview)
         self.logarea["yscrollcommand"] = self.ys.set
-        self.logarea.insert("1.0", "汎用声質変換ソフト「こえへん！」Ver.beta2\n(C)Takosumi 2022\nここにログが表示されます。")
+        self.logarea.insert("1.0", "汎用声質変換ソフト「こえへん！」Ver.beta3\n(C)Takosumi 2022\nここにログが表示されます。")
         self.logarea["state"] = "disabled"
 
 class rightwindow:
@@ -434,6 +437,7 @@ class rightwindow:
         self.border_final = self.border
         self.average_final = self.average
         self.a_final = self.a
+        self.framerate = self.button.button1.framerate
         self.var1.set("現在の変換データ：上より推定")
         self.export_button.state(["!disabled"])
         self.editor.t.destroy()
@@ -543,11 +547,9 @@ class rightwindow2(rightwindow):
         self.secondframe.grid(column = a, row = 1, sticky = (N, W, E, S))
         self.original_border = [33, 45, 88, 125, 185, 215, 245, 310]
         self.original_average = [40, 1, 40, 5, 0.01, 0.01, 0.01, 0.02, 0.01]
-        self.estimated_spec = original_spectrum([self.original_average[0]/1000000, self.original_average[1]/1000000, self.original_average[2]/1000000, self.original_average[3]/1000000, self.original_average[4]/1000000, self.original_average[5]/1000000, self.original_average[6]/1000000, self.original_average[7]/1000000, self.original_average[8]/1000000],
-            [(self.original_border[0])/3, (self.original_border[1] + self.original_border[0])/2, (self.original_border[2] + self.original_border[1])/2, (self.original_border[3] + self.original_border[2])/2, (self.original_border[4] + self.original_border[3])/2, (self.original_border[5] + self.original_border[4])/2, (self.original_border[6] + self.original_border[5])/2, (self.original_border[7] + self.original_border[6])/2, (512 + self.original_border[7])/2],
-            [(self.original_border[0])/3, (self.original_border[1] - self.original_border[0])/4, (self.original_border[2] - self.original_border[1])/4, (self.original_border[3] - self.original_border[2])/4, (self.original_border[4] - self.original_border[3])/4, (self.original_border[5] - self.original_border[4])/4, (self.original_border[6] - self.original_border[5])/4, (self.original_border[7] - self.original_border[6])/4, (512 - self.original_border[7])/4])
-        self.average2 = uv.average_calculate(self.original_border, self.estimated_spec)
-        self.edit_window_button = ttk.Button(self.secondframe, text = "編集ウインドウを開く", command = lambda: self.open_voice_editor_window(mainframe, self.original_border, self.original_average, self.estimated_spec))
+        self.estimated_spec = []
+        self.average2 = []
+        self.edit_window_button = ttk.Button(self.secondframe, text = "編集ウインドウを開く", command = lambda: self.open_voice_editor_window(mainframe))
         self.edit_window_button.grid(column = 0, row = 0, sticky = (E, W))
         self.param_save_button = ttk.Button(self.secondframe, text = "音声パラメータ保存", command = self.original_voice_parameter_save)
         self.param_save_button.grid(column = 0, row = 1, sticky = (E, W))
@@ -555,14 +557,22 @@ class rightwindow2(rightwindow):
         self.param_save_button.grid(column = 0, row = 2, sticky = (E, W))
         self.subframe.tkraise()
 
-    def open_voice_editor_window(self, mainframe, b, a, s):
-        self.original_voice_editor = original_voice_editor(mainframe, b, a, s)
-        self.update_button = ttk.Button(self.original_voice_editor.frame1, text = "決定", command = self.original_voice_update)
-        self.update_button.grid(column = 1, row = 18, columnspan = 3, sticky = (N))
-        self.original_voice_editor.frame1.rowconfigure(18, weight = 1)
-        self.original_voice_editor.t.grab_set()
-        self.original_voice_editor.t.focus_set()
-        root.wait_window(self.original_voice_editor.t)
+    def open_voice_editor_window(self, mainframe):
+        if app.rightwindow1.var1.get() != "現在の変換データ：(データなし)":
+            self.estimated_spec = original_spectrum([self.original_average[0]/1000000, self.original_average[1]/1000000, self.original_average[2]/1000000, self.original_average[3]/1000000, self.original_average[4]/1000000, self.original_average[5]/1000000, self.original_average[6]/1000000, self.original_average[7]/1000000, self.original_average[8]/1000000],
+                [(self.original_border[0])/3, (self.original_border[1] + self.original_border[0])/2, (self.original_border[2] + self.original_border[1])/2, (self.original_border[3] + self.original_border[2])/2, (self.original_border[4] + self.original_border[3])/2, (self.original_border[5] + self.original_border[4])/2, (self.original_border[6] + self.original_border[5])/2, (self.original_border[7] + self.original_border[6])/2, (len(app.rightwindow1.a_final) - 1 + self.original_border[7])/2],
+                [(self.original_border[0])/3, (self.original_border[1] - self.original_border[0])/4, (self.original_border[2] - self.original_border[1])/4, (self.original_border[3] - self.original_border[2])/4, (self.original_border[4] - self.original_border[3])/4, (self.original_border[5] - self.original_border[4])/4, (self.original_border[6] - self.original_border[5])/4, (self.original_border[7] - self.original_border[6])/4, (len(app.rightwindow1.a_final) - 1 - self.original_border[7])/4],
+                len(app.rightwindow1.a_final))
+            self.average2 = uv.average_calculate(self.original_border, self.estimated_spec)
+            self.original_voice_editor = original_voice_editor(mainframe, self.original_border, self.original_average, self.estimated_spec)
+            self.update_button = ttk.Button(self.original_voice_editor.frame1, text = "決定", command = self.original_voice_update)
+            self.update_button.grid(column = 1, row = 18, columnspan = 3, sticky = (N))
+            self.original_voice_editor.frame1.rowconfigure(18, weight = 1)
+            self.original_voice_editor.t.grab_set()
+            self.original_voice_editor.t.focus_set()
+            root.wait_window(self.original_voice_editor.t)
+        else:
+            log_insert("[エラー] 変換元話者の変換データがありません。")
 
     def original_voice_update(self):
         self.original_border = [self.original_voice_editor.entry1.x, self.original_voice_editor.entry2.x, self.original_voice_editor.entry3.x, self.original_voice_editor.entry4.x, self.original_voice_editor.entry5.x, self.original_voice_editor.entry6.x, self.original_voice_editor.entry7.x, self.original_voice_editor.entry8.x]
@@ -579,19 +589,26 @@ class rightwindow2(rightwindow):
             with open(self.filename) as self.f:
                 try:
                     self.data = json.load(self.f)
-                    self.original_border = self.data["original_border"]
-                    self.original_average = self.data["original_average"]
-                    self.estimated_spec = original_spectrum([self.original_average[0]/1000000, self.original_average[1]/1000000, self.original_average[2]/1000000, self.original_average[3]/1000000, self.original_average[4]/1000000, self.original_average[5]/1000000, self.original_average[6]/1000000, self.original_average[7]/1000000, self.original_average[8]/1000000],
-                        [(self.original_border[0])/3, (self.original_border[1] + self.original_border[0])/2, (self.original_border[2] + self.original_border[1])/2, (self.original_border[3] + self.original_border[2])/2, (self.original_border[4] + self.original_border[3])/2, (self.original_border[5] + self.original_border[4])/2, (self.original_border[6] + self.original_border[5])/2, (self.original_border[7] + self.original_border[6])/2, (512 + self.original_border[7])/2],
-                        [(self.original_border[0])/3, (self.original_border[1] - self.original_border[0])/4, (self.original_border[2] - self.original_border[1])/4, (self.original_border[3] - self.original_border[2])/4, (self.original_border[4] - self.original_border[3])/4, (self.original_border[5] - self.original_border[4])/4, (self.original_border[6] - self.original_border[5])/4, (self.original_border[7] - self.original_border[6])/4, (512 - self.original_border[7])/4])
-                    self.average2 = self.data["average"]
+                    if app.rightwindow1.var1.get() != "現在の変換データ：(データなし)":
+                        if self.data["framerate"] == app.rightwindow1.framerate:
+                            self.original_border = self.data["original_border"]
+                            self.original_average = self.data["original_average"]
+                            self.estimated_spec = original_spectrum([self.original_average[0]/1000000, self.original_average[1]/1000000, self.original_average[2]/1000000, self.original_average[3]/1000000, self.original_average[4]/1000000, self.original_average[5]/1000000, self.original_average[6]/1000000, self.original_average[7]/1000000, self.original_average[8]/1000000],
+                                [(self.original_border[0])/3, (self.original_border[1] + self.original_border[0])/2, (self.original_border[2] + self.original_border[1])/2, (self.original_border[3] + self.original_border[2])/2, (self.original_border[4] + self.original_border[3])/2, (self.original_border[5] + self.original_border[4])/2, (self.original_border[6] + self.original_border[5])/2, (self.original_border[7] + self.original_border[6])/2, (512 + self.original_border[7])/2],
+                                [(self.original_border[0])/3, (self.original_border[1] - self.original_border[0])/4, (self.original_border[2] - self.original_border[1])/4, (self.original_border[3] - self.original_border[2])/4, (self.original_border[4] - self.original_border[3])/4, (self.original_border[5] - self.original_border[4])/4, (self.original_border[6] - self.original_border[5])/4, (self.original_border[7] - self.original_border[6])/4, (512 - self.original_border[7])/4],
+                                len(app.rightwindow1.a_final))
+                            self.average2 = self.data["average"]
+                        else:
+                            log_insert("[エラー] サンプリング周波数が変換元話者のものと一致していません。")
+                    else:
+                        log_insert("[エラー] 変換元話者の変換データがありません。")
                 except (TypeError, KeyError):
                     log_insert("[エラー] データ形式が誤っています。")
 
     def original_voice_parameter_save(self):
         self.filename = filedialog.asksaveasfilename(title = "音声パラメータ保存", filetypes = [("JSON", ".json")], defaultextension = "json")
         if len(self.filename) != 0:
-            self.data = {"original_border":self.original_border, "original_average":self.original_average, "average":self.average2}
+            self.data = {"original_border":self.original_border, "original_average":self.original_average, "average":self.average2, "framerate":app.rightwindow1.framerate}
             try:
                 with open(self.filename, "w") as self.f:
                     json.dump(self.data, self.f, indent = 4, ensure_ascii = False)
@@ -830,7 +847,8 @@ class original_voice_editor(abstract_editor):
     def spectrum_estimate(self):
         self.spec =  original_spectrum([self.entry11.num/1000000, self.entry12.num/1000000, self.entry13.num/1000000, self.entry14.num/1000000, self.entry15.num/1000000, self.entry16.num/1000000, self.entry17.num/1000000, self.entry18.num/1000000, self.entry19.num/1000000],
                 [self.entry1.x/3, (self.entry2.x + self.entry1.x)/2, (self.entry3.x + self.entry2.x)/2, (self.entry4.x + self.entry3.x)/2, (self.entry5.x + self.entry4.x)/2, (self.entry6.x + self.entry5.x)/2, (self.entry7.x + self.entry6.x)/2, (self.entry8.x + self.entry7.x)/2, (512 + self.entry8.x)/2],
-                [self.entry1.x/3, (self.entry2.x - self.entry1.x)/4, (self.entry3.x - self.entry2.x)/4, (self.entry4.x - self.entry3.x)/4, (self.entry5.x - self.entry4.x)/4, (self.entry6.x - self.entry5.x)/4, (self.entry7.x - self.entry6.x)/4, (self.entry8.x - self.entry7.x)/4, (512 - self.entry8.x)/4])
+                [self.entry1.x/3, (self.entry2.x - self.entry1.x)/4, (self.entry3.x - self.entry2.x)/4, (self.entry4.x - self.entry3.x)/4, (self.entry5.x - self.entry4.x)/4, (self.entry6.x - self.entry5.x)/4, (self.entry7.x - self.entry6.x)/4, (self.entry8.x - self.entry7.x)/4, (512 - self.entry8.x)/4],
+                len(app.rightwindow1.a_final))
 
     def update(self, a):
         self.a = a.var.get()
@@ -909,8 +927,8 @@ class sample_rate_menu:
         self.a = self.var.get()
         if self.a.isdecimal():
             self.num = int(self.a)
-            if self.num < 1:
-                self.num = 1
+            if self.num < 16000:
+                self.num = 16000
 
     def display_update(self, event):
         self.var.set(self.num)
@@ -1076,9 +1094,9 @@ class voice_changer:
         self.result = []
         self.button_text1 = StringVar()
         self.button_text2 = StringVar()
+        self.button_text3 = StringVar()
         self.button_text1.set("変換開始")
         self.button_text2.set("変換")
-        self.button_text3 = StringVar()
         self.button_text3.set("ダークモード")
         self.entry_text1 = StringVar()
         self.entry_text2 = StringVar()
@@ -1088,7 +1106,6 @@ class voice_changer:
         self.save_mode = IntVar()
         self.save_mode.set(0)
         self.flag = 0
-        self.frame_length = 1024 * 8
         self.audio = pyaudio.PyAudio()
         self.stream = None
         self.device_get()
@@ -1392,25 +1409,33 @@ class voice_changer:
             self.output_device_select.state(["disabled"])
             self.device_update.state(["disabled"])
             self.audio = pyaudio.PyAudio()
+            self.num_channels = int(self.entry_text4.get())
+            self.frame_length = 2 ** int(np.log2(self.sample_rate_menu.num) - 1) * self.num_channels
+            self.actual_length = self.num_channels * self.frame_length
             try:
                 if self.audio.is_format_supported(rate = self.sample_rate_menu.num,
                             input_device = self.input_device_index_current[self.input_device_select.current()],
-                            input_channels = int(self.entry_text4.get()),
+                            input_channels = self.num_channels,
                             input_format = pyaudio.paInt16):
                     try:
                         if self.audio.is_format_supported(rate = self.sample_rate_menu.num,
                                 output_device = self.output_device_index_current[self.output_device_select.current()],
-                                output_channels = int(self.entry_text4.get()),
+                                output_channels = self.num_channels,
                                 output_format = pyaudio.paInt16):
-                            self.stream = self.audio.open(format = pyaudio.paInt16,
-                                channels = int(self.entry_text4.get()),
-                                rate = self.sample_rate_menu.num,
-                                frames_per_buffer = self.frame_length,
-                                input=True,
-                                output=True,
-                                input_device_index = self.input_device_index_current[self.input_device_select.current()],
-                                output_device_index = self.output_device_index_current[self.output_device_select.current()],
-                                stream_callback = self.callback)
+                            self.buffer = np.zeros(int(self.actual_length/8), dtype = "float64")
+                            self.stack = np.zeros(int(self.actual_length/32), dtype = "float64")
+                            self.input_mask = np.arange(0,1,32/self.actual_length).astype(np.float64)
+                            self.output_mask = np.arange(1,0,-32/self.actual_length).astype(np.float64)
+                            self.stop_flag = 0
+                            self.abort_flag = 0
+                            self.input_line = queue.Queue()
+                            self.output_line = queue.Queue()
+                            self.thread4 = threading.Thread(target = self.run4)
+                            self.thread4.start()
+                            self.thread2 = threading.Thread(target = self.run2)
+                            self.thread2.start()
+                            self.thread3 = threading.Thread(target = self.run3)
+                            self.thread3.start()
                     except ValueError as e:
                         if e.args[0] == "Invalid sample rate":
                             log_insert("[エラー] 現在の周波数(" + str(self.sample_rate_menu.num) + "Hz)がOS側の周波数の設定と異なっています。\nコントロールパネル>ハードウェアとサウンド>サウンドからデバイスのプロパティを開き、周波数の設定を変更してください。")
@@ -1424,45 +1449,98 @@ class voice_changer:
                     log_insert("[エラー] 入力デバイスが現在の音声形式(" + str(self.sample_rate_menu.num) + "Hz/16bit/" + self.entry_text4.get() + "チャンネル)に対応していません。")
                 self.voice_change3()
         elif self.flag == 1:
-            self.stream.stop_stream()
-            self.stream.close()
             self.voice_change3()
 
     def voice_change3(self):
         self.flag = 0
         self.button_text1.set("変換開始")
-        self.audio.terminate()
         self.input_api_select.state(["!disabled"])
         self.input_device_select.state(["!disabled"])
         self.output_device_select.state(["!disabled"])
         self.device_update.state(["!disabled"])
         self.mode_change_button.state(["!disabled"])
 
-    def callback(self, in_data, frame_count, time_info, status):
-        try:
-            if self.entry_text4.get() == "2":
-                self.spec_mat_l, self.aperiod_mat_l, self.f0_l = self.voice_convert(np.ascontiguousarray(np.frombuffer(in_data, dtype = "int16").astype(np.float64)[::2]/32768.0))
-                self.new_f0_l = self.freq_convert(self.f0_l)
-                self.out_data_l = pw.synthesize(self.new_f0_l, self.spec_mat_l, self.aperiod_mat_l, self.sample_rate_menu.num)
-                self.spec_mat_r, self.aperiod_mat_r, self.f0_r = self.voice_convert(np.ascontiguousarray(np.frombuffer(in_data, dtype = "int16").astype(np.float64)[1::2]/32768.0))
-                self.new_f0_r = self.freq_convert(self.f0_r)
-                self.out_data_r = pw.synthesize(self.new_f0_r, self.spec_mat_r, self.aperiod_mat_r, self.sample_rate_menu.num)
-                self.out_data = np.empty(len(self.out_data_l) + len(self.out_data_r), dtype = "float64")
-                self.out_data[::2] = self.out_data_l * 32768.0 * self.volume_menu.num
-                self.out_data[1::2] = self.out_data_r * 32768.0 * self.volume_menu.num
-                return (self.out_data.astype(np.int16).tobytes(), pyaudio.paContinue)
-            else:
-                self.spec_mat, self.aperiod_mat, self.f0 = self.voice_convert(np.frombuffer(in_data, dtype = "int16").astype(np.float64)/32768.0)
-                self.new_f0 = self.freq_convert(self.f0)
-                self.out_data = pw.synthesize(self.new_f0, self.spec_mat, self.aperiod_mat, self.sample_rate_menu.num) * 32768.0 * self.volume_menu.num
-                return (self.out_data.astype(np.int16).tobytes(), pyaudio.paContinue)
-        except Exception:
+    def run2(self):
+        self.stream = self.audio.open(format = pyaudio.paInt16,
+                                channels = self.num_channels,
+                                rate = self.sample_rate_menu.num,
+                                frames_per_buffer = self.frame_length,
+                                input=True,
+                                output=False,
+                                input_device_index = self.input_device_index_current[self.input_device_select.current()])
+        while self.flag == 1 and self.abort_flag == 0:
+            try:
+                self.in_data = np.frombuffer(self.stream.read(self.frame_length), dtype = "int16").astype(np.float64)/32768.0
+                self.input_line.put(self.in_data)
+            except OSError:
+                self.abort_flag = 1
+        if self.abort_flag == 0:
+            self.stream.stop_stream()
+            self.stream.close()
+        else:
+            try:
+                self.stream.stop_stream()
+                self.stream.close()
+            except Exception:
+                pass
+            log_insert("[info] デバイスに変更が生じたため、変換を中断しました。")
             self.voice_change3()
-            log_insert("[info] エラーが発生したため、変換を中断しました。")
-            if self.entry_text4.get() == "2":
-                return (np.array([0] * self.frame_length * 2).astype(np.int16).tobytes(), pyaudio.paAbort)
-            else:
-                return (np.array([0] * self.frame_length).astype(np.int16).tobytes(), pyaudio.paAbort)
+        while self.stop_flag == 0:
+            time.sleep(0.01)
+        self.audio.terminate()
+
+    def run4(self):
+        while self.flag == 1:
+            try:
+                self.input_data = self.input_line.get()
+                self.process_data = np.concatenate([self.buffer, self.input_data])
+                self.buffer = self.in_data[int(len(self.in_data) * 7/8):]
+                if self.num_channels == 2:
+                    self.process_data_l = np.ascontiguousarray(self.process_data[::2])
+                    self.process_data_r = np.ascontiguousarray(self.process_data[1::2])
+                    self.spec_mat_l, self.aperiod_mat_l, self.f0_l = self.voice_convert(self.process_data_l)
+                    self.new_f0_l = self.freq_convert(self.f0_l)
+                    self.out_data_l = pw.synthesize(self.new_f0_l, self.spec_mat_l, self.aperiod_mat_l, self.sample_rate_menu.num)
+                    self.spec_mat_r, self.aperiod_mat_r, self.f0_r = self.voice_convert(self.process_data_r)
+                    self.new_f0_r = self.freq_convert(self.f0_r)
+                    self.out_data_r = pw.synthesize(self.new_f0_r, self.spec_mat_r, self.aperiod_mat_r, self.sample_rate_menu.num)
+                    self.out_data = np.empty(len(self.out_data_l) * 2, dtype = "float64")
+                    self.out_data[::2] = self.out_data_l
+                    self.out_data[1::2] = self.out_data_r
+                else:
+                    self.spec_mat, self.aperiod_mat, self.f0 = self.voice_convert(self.process_data)
+                    self.new_f0 = self.freq_convert(self.f0)
+                    self.out_data = pw.synthesize(self.new_f0, self.spec_mat, self.aperiod_mat, self.sample_rate_menu.num) * self.volume_menu.num                self.write_data = self.out_data[2 * int(len(self.out_data)/4)-int(self.actual_length * (33/64)):2 * int(len(self.out_data)/4)+int(self.actual_length * (33/64))]
+                self.result = np.concatenate([self.stack * self.output_mask + self.write_data[:int(self.actual_length/32)] * self.input_mask, self.write_data[int(self.actual_length/32):self.actual_length]])
+                self.stack = self.write_data[self.actual_length:]
+                self.output_line.put((self.result * 32768.0).astype(np.int16))
+            except Exception:
+                pass
+
+    def run3(self):
+        self.stream1 = self.audio.open(format = pyaudio.paInt16,
+                                channels = self.num_channels,
+                                rate = self.sample_rate_menu.num,
+                                frames_per_buffer = self.frame_length,
+                                input=False,
+                                output=True,
+                                output_device_index = self.output_device_index_current[self.output_device_select.current()])
+        while (self.flag == 1 and self.abort_flag == 0):
+            try:
+                self.get_data = self.output_line.get()
+                self.stream1.write(self.get_data.tobytes())
+            except OSError:
+                self.abort_flag = 1
+        if self.abort_flag == 0:
+            self.stream1.stop_stream()
+            self.stream1.close()
+        else:
+            try:
+                self.stream1.stop_stream()
+                self.stream1.close()
+            except OSError:
+                pass
+        self.stop_flag = 1
 
     def file_change(self):
         if self.rightwindow1.var1.get() != "現在の変換データ：(データなし)" and self.rightwindow2.var1.get() != "現在の変換データ：(データなし)":
@@ -1561,22 +1639,12 @@ class voice_changer:
         self.mode_change_button.state(["!disabled"])
 
     def freq_convert(self, a):
-        self.new_a = []
-        self.f = 0
-        for j in range(len(a)):
-            if a[j] == 0:
-                self.new_a.append(0.0)
-            else:
-                if self.freq_transfer_menu.var.get() == "比例変換":
-                    self.b = a[j] * self.freq_transfer_linear.num1 + self.freq_transfer_linear.num2
-                    if self.b < 0:
-                        self.f = 1
-                    else:
-                        self.new_a.append(self.b)
-                elif self.freq_transfer_menu.var.get() == "オクターブ変換":
-                    self.new_a.append(a[j] * (2 ** (self.freq_transfer_octave.num/12)))
-        if self.f == 0:
-            return np.array(self.new_a)
+        if self.freq_transfer_menu.var.get() == "比例変換":
+            self.new_a = np.where(a == 0, 0, 1) * (a * self.freq_transfer_linear.num1 + self.freq_transfer_linear.num2)
+        elif self.freq_transfer_menu.var.get() == "オクターブ変換":
+            self.new_a = a * (2 ** (self.freq_transfer_octave.num/12))
+        if min(self.new_a) >= 0:
+            return self.new_a
         else:
             log_insert("[エラー] 変換後の基本周波数がマイナスになりました。\n変換係数を変更してもう一度試してください。")
             raise Exception("Freq convert error")
@@ -1684,7 +1752,7 @@ if path.isfile(path.dirname(sys.argv[0]) + "\\" + "Latest.json"):
         except (TypeError, KeyError):
             log_insert("[警告] 前回終了した時のデータの読み込みに失敗しました。")
 else:
-    log_insert("[警告] 前回終了した時のデータが見つかりません。(この警告は、初回起動時にも表示されます)")
+    log_insert("[警告] 前回終了した時のデータが見つかりません(この警告は、初回起動時にも表示されます)。")
 
 root.iconbitmap(path.dirname(sys.argv[0]) + "\\images\\Koehen-Logo.ico")
 root.minsize(width = 400, height = 550)
