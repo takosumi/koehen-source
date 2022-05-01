@@ -2,7 +2,6 @@
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
-from tkinter import messagebox
 from tkinter import font
 from os import path
 import sys
@@ -148,16 +147,15 @@ class NavigationToolbar(NavigationToolbar2Tk):
 regpath = r"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"
 try:
     regkey = winreg.OpenKeyEx(winreg.HKEY_CURRENT_USER, regpath)
-    regdata, regtype = winreg.QueryValueEx(regkey, "AppsUseLightTheme")
+    regdata, _ = winreg.QueryValueEx(regkey, "AppsUseLightTheme")
     winreg.CloseKey(regkey)
 except Exception:
     regdata = 1
 #windowsのバージョンを確認
-version_data = platform.version()
-build_number = int(version_data[version_data.rfind(".") + 1:len(version_data)])
+build_number = int(platform.version().split(".")[-1])
 
 root = Tk()
-root.tk.call('source', path.dirname(sys.argv[0]) + '\\theme\\black.tcl')
+root.tk.call("source", path.dirname(sys.argv[0]) + "\\theme\\black.tcl")
 
 #Windowsがダークモードの時にタイトルバーを黒色にする
 #参考：https://gist.github.com/Olikonsti/879edbf69b801d8519bf25e804cec0aa
@@ -350,7 +348,6 @@ class rightwindow:
         self.e = ""
         self.o = ""
         self.file_path = ""
-        self.flag = 0
         self.framerate = 0
         self.subframe = ttk.Frame(mainframe)
         self.subframe.grid(column = a, row = 1, sticky = (N, W, E, S))
@@ -427,11 +424,12 @@ class rightwindow:
         self.update_button = ttk.Button(self.editor.frame1, text = "決定", command = self.update)
         self.update_button.grid(column = 1, row = 17, sticky = (N))
         self.editor.frame1.rowconfigure(17, weight = 1)
+        self.editor.t.bind("<Shift-Return>", self.update)
         self.editor.t.grab_set()
         self.editor.t.focus_set()
         root.wait_window(self.editor.t)
 
-    def update(self):
+    def update(self, *args):
         self.border = [self.editor.entry1.x, self.editor.entry2.x, self.editor.entry3.x, self.editor.entry4.x, self.editor.entry5.x, self.editor.entry6.x, self.editor.entry7.x, self.editor.entry8.x]
         self.average = uv.average_calculate(self.border, self.a)
         self.border_final = self.border
@@ -519,13 +517,16 @@ class rightwindow:
         with open(filename) as self.f:
             try:
                 self.data = json.load(self.f)
-                self.border_final = self.data["border"]
-                self.average_final = self.data["average"]
-                self.a_final = np.array(self.data["a"])
-                self.framerate = int(self.data["framerate"])
-                self.file_path = filename
-                self.var1.set("現在の変換データ：" + path.basename(filename))
-                self.export_button.state(["disabled"])
+                if int(self.data["framerate"]) == app.sample_rate_menu.num:
+                    self.border_final = self.data["border"]
+                    self.average_final = self.data["average"]
+                    self.a_final = np.array(self.data["a"])
+                    self.framerate = int(self.data["framerate"])
+                    self.file_path = filename
+                    self.var1.set("現在の変換データ：" + path.basename(filename))
+                    self.export_button.state(["disabled"])
+                else:
+                    log_insert("[エラー] 読み込むファイルの周波数(" + str(self.data["framerate"]) + "Hz)が規定値(" + str(app.sample_rate_menu.num) + "Hz)と異なります。")
             except (TypeError, KeyError):
                 log_insert("[エラー] データ形式が誤っています。")
 
@@ -568,13 +569,14 @@ class rightwindow2(rightwindow):
             self.update_button = ttk.Button(self.original_voice_editor.frame1, text = "決定", command = self.original_voice_update)
             self.update_button.grid(column = 1, row = 18, columnspan = 3, sticky = (N))
             self.original_voice_editor.frame1.rowconfigure(18, weight = 1)
+            self.original_voice_editor.t.bind("<Shift-Return>", self.original_voice_update)
             self.original_voice_editor.t.grab_set()
             self.original_voice_editor.t.focus_set()
             root.wait_window(self.original_voice_editor.t)
         else:
             log_insert("[エラー] 変換元話者の変換データがありません。")
 
-    def original_voice_update(self):
+    def original_voice_update(self, *args):
         self.original_border = [self.original_voice_editor.entry1.x, self.original_voice_editor.entry2.x, self.original_voice_editor.entry3.x, self.original_voice_editor.entry4.x, self.original_voice_editor.entry5.x, self.original_voice_editor.entry6.x, self.original_voice_editor.entry7.x, self.original_voice_editor.entry8.x]
         self.original_average = [self.original_voice_editor.entry11.num, self.original_voice_editor.entry12.num, self.original_voice_editor.entry13.num, self.original_voice_editor.entry14.num, self.original_voice_editor.entry15.num, self.original_voice_editor.entry16.num, self.original_voice_editor.entry17.num, self.original_voice_editor.entry18.num, self.original_voice_editor.entry19.num]
         self.estimated_spec = self.original_voice_editor.spec
@@ -641,6 +643,7 @@ class open_button_set:
 class open_button:
     def __init__(self, mainframe):
         self.file_path = ""
+        self.new_file_path = ""
         self.filename = StringVar()
         self.filename.set("")
         self.button = ttk.Button(mainframe, text = "開く", command = self.file_read, width = "12")
@@ -649,12 +652,13 @@ class open_button:
         self.framerate = None
 
     def file_read(self):
-        self.file_path = filedialog.askopenfilename(title = "音声ファイルを開く", filetypes = [("wave", ".wav")])
-        if len(self.file_path) != 0:
-            self.file_read1(self.file_path)
+        self.new_file_path = filedialog.askopenfilename(title = "音声ファイルを開く", filetypes = [("wave", ".wav")])
+        if len(self.new_file_path) != 0:
+            self.file_read1(self.new_file_path)
 
     def file_read1(self, file_path):
         if not(type(waveread(file_path, 0)) is int):
+            self.file_path = file_path
             self.filename.set(path.basename(file_path))
             self.signal, self.framerate = waveread(file_path, 0)
             ToolTip.createToolTip(self.filelabel, self.filename.get())
@@ -662,6 +666,7 @@ class open_button:
 class open_button2(open_button):
     def file_read1(self, file_path):
         if not(type(waveread(file_path, 1)) is int):
+            self.file_path = file_path
             self.filename.set(path.basename(file_path))
             self.signal_l, self.signal_r, self.framerate, self.n_channel, self.n_bytes = waveread(file_path, 1)
             ToolTip.createToolTip(self.filelabel, self.filename.get())
@@ -745,14 +750,14 @@ class abstract_editor:
         self.entry8.s.bind("<FocusOut>", lambda event: self.change_red_to_black(self.entry8))
         self.entry8.xcoords.trace_add("write", lambda *args: self.slide(self.entry8))
 
-        self.entry1.s.bind("<FocusIn>", lambda event:self.get_border(0, self.entry2.x, self.entry1), "+")
-        self.entry2.s.bind("<FocusIn>", lambda event:self.get_border(self.entry1.x, self.entry3.x, self.entry2), "+")
-        self.entry3.s.bind("<FocusIn>", lambda event:self.get_border(self.entry2.x, self.entry4.x, self.entry3), "+")
-        self.entry4.s.bind("<FocusIn>", lambda event:self.get_border(self.entry3.x, self.entry5.x, self.entry4), "+")
-        self.entry5.s.bind("<FocusIn>", lambda event:self.get_border(self.entry4.x, self.entry6.x, self.entry5), "+")
-        self.entry6.s.bind("<FocusIn>", lambda event:self.get_border(self.entry5.x, self.entry7.x, self.entry6), "+")
-        self.entry7.s.bind("<FocusIn>", lambda event:self.get_border(self.entry6.x, self.entry8.x, self.entry7), "+")
-        self.entry8.s.bind("<FocusIn>", lambda event:self.get_border(self.entry7.x, 0, self.entry8), "+")
+        self.entry1.s.bind("<FocusIn>", lambda event: self.get_border(0, self.entry2.x, self.entry1), "+")
+        self.entry2.s.bind("<FocusIn>", lambda event: self.get_border(self.entry1.x, self.entry3.x, self.entry2), "+")
+        self.entry3.s.bind("<FocusIn>", lambda event: self.get_border(self.entry2.x, self.entry4.x, self.entry3), "+")
+        self.entry4.s.bind("<FocusIn>", lambda event: self.get_border(self.entry3.x, self.entry5.x, self.entry4), "+")
+        self.entry5.s.bind("<FocusIn>", lambda event: self.get_border(self.entry4.x, self.entry6.x, self.entry5), "+")
+        self.entry6.s.bind("<FocusIn>", lambda event: self.get_border(self.entry5.x, self.entry7.x, self.entry6), "+")
+        self.entry7.s.bind("<FocusIn>", lambda event: self.get_border(self.entry6.x, self.entry8.x, self.entry7), "+")
+        self.entry8.s.bind("<FocusIn>", lambda event: self.get_border(self.entry7.x, 0, self.entry8), "+")
 
     def slide(self, a):
         if a.xcoords.get().isdecimal():
@@ -1103,8 +1108,7 @@ class voice_changer:
         self.entry_text3 = StringVar()
         self.entry_text4 = StringVar()
         self.entry_text4.set("1")
-        self.save_mode = IntVar()
-        self.save_mode.set(0)
+        self.global_flag = 0
         self.flag = 0
         self.audio = pyaudio.PyAudio()
         self.stream = None
@@ -1320,7 +1324,7 @@ class voice_changer:
         self.bak3.append(self.input_api_select.current())
         self.bak3.append(self.input_device_select.current())
         self.bak3.append(self.output_device_select.current())
-        self.bak3.append(self.sample_rate_menu.entry.current())
+        self.bak3.append(self.sample_rate_menu.num)
         self.bak3.append(self.convert_method_menu.entry.current())
         self.bak3.append(self.freq_transfer_menu.entry.current())
         self.bak3.append(self.input_channel_menu.current())
@@ -1364,7 +1368,8 @@ class voice_changer:
         self.output_device_select.grid(column = 3, row = 1)
         self.output_device_select.current(self.bak3[2])
         self.sample_rate_menu = sample_rate_menu(self.topframe)
-        self.sample_rate_menu.entry.current(self.bak3[3])
+        self.sample_rate_menu.var.set(self.bak3[3])
+        self.sample_rate_menu.num = self.bak3[3]
         self.convert_method_menu = convert_method_menu(self.bottomframe1)
         self.convert_method_menu.entry.bind("<<ComboboxSelected>>", self.frame_change2)
         self.convert_method_menu.entry.current(self.bak3[4])
@@ -1385,11 +1390,13 @@ class voice_changer:
                     self.voice_change2()
                 else:
                     log_insert("[エラー] 変換元話者の変換データの周波数(" + str(self.rightwindow1.framerate) + "Hz)と現在の規定値(" + str(self.sample_rate_menu.num) + "Hz)が一致していません。")
+                    self.mode_change_button.state(["disabled"])
             else:
                 if self.rightwindow1.framerate == self.rightwindow2.framerate == self.sample_rate_menu.num:
                     self.voice_change2()
                 else:
                     log_insert("[エラー] 変換元話者の変換データの周波数(" + str(self.rightwindow1.framerate) + "Hz) 、変換先話者の変換データの周波数(" + str(self.rightwindow2.framerate) + "Hz)、現在の規定値(" + str(self.sample_rate_menu.num) + "Hz)が一致していません。")
+                    self.mode_change_button.state(["disabled"])
         else:
             if self.rightwindow1.var1.get() == "現在の変換データ：(データなし)":
                 log_insert("[エラー] 変換元話者の変換データがありません。")
@@ -1400,56 +1407,56 @@ class voice_changer:
         if self.input_api_list[self.input_api_select.current()] == "(デフォルトのAPIなし)" or self.input_device_display_list[self.input_device_select.current()] == "(デフォルトのデバイスなし)" or self.output_device_display_list[self.output_device_select.current()] == "(デフォルトのデバイスなし)":
             log_insert("[エラー] 有効なデバイスがありません。")
             self.mode_change_button.state(["!disabled"])
-            return 1
-        if self.flag == 0:
-            self.flag = 1
-            self.button_text1.set("変換停止")
-            self.input_api_select.state(["disabled"])
-            self.input_device_select.state(["disabled"])
-            self.output_device_select.state(["disabled"])
-            self.device_update.state(["disabled"])
-            self.audio = pyaudio.PyAudio()
-            self.num_channels = int(self.entry_text4.get())
-            self.frame_length = 2 ** int(np.log2(self.sample_rate_menu.num) - 1) * self.num_channels
-            self.actual_length = self.num_channels * self.frame_length
-            try:
-                if self.audio.is_format_supported(rate = self.sample_rate_menu.num,
-                            input_device = self.input_device_index_current[self.input_device_select.current()],
-                            input_channels = self.num_channels,
-                            input_format = pyaudio.paInt16):
-                    try:
-                        if self.audio.is_format_supported(rate = self.sample_rate_menu.num,
-                                output_device = self.output_device_index_current[self.output_device_select.current()],
-                                output_channels = self.num_channels,
-                                output_format = pyaudio.paInt16):
-                            self.buffer = np.zeros(int(self.actual_length/8), dtype = "float64")
-                            self.stack = np.zeros(int(self.actual_length/32), dtype = "float64")
-                            self.input_mask = np.arange(0,1,32/self.actual_length).astype(np.float64)
-                            self.output_mask = np.arange(1,0,-32/self.actual_length).astype(np.float64)
-                            self.stop_flag = 0
-                            self.abort_flag = 0
-                            self.input_line = queue.Queue()
-                            self.output_line = queue.Queue()
-                            self.thread4 = threading.Thread(target = self.run4)
-                            self.thread4.start()
-                            self.thread2 = threading.Thread(target = self.run2)
-                            self.thread2.start()
-                            self.thread3 = threading.Thread(target = self.run3)
-                            self.thread3.start()
-                    except ValueError as e:
-                        if e.args[0] == "Invalid sample rate":
-                            log_insert("[エラー] 現在の周波数(" + str(self.sample_rate_menu.num) + "Hz)がOS側の周波数の設定と異なっています。\nコントロールパネル>ハードウェアとサウンド>サウンドからデバイスのプロパティを開き、周波数の設定を変更してください。")
-                        else:
-                            log_insert("[エラー] 出力デバイスが現在の音声形式(" + str(self.sample_rate_menu.num) + "Hz/16bit/" + self.entry_text4.get() + "チャンネル)に対応していません。")
-                        self.voice_change3()
-            except ValueError as e:
-                if e.args[0] == "Invalid sample rate":
-                    log_insert("[エラー] 現在の周波数(" + str(self.sample_rate_menu.num) + "Hz)がOS側の周波数の設定と異なっています。\nコントロールパネル>ハードウェアとサウンド>サウンドからデバイスのプロパティを開き、周波数の設定を変更してください。")
-                else:
-                    log_insert("[エラー] 入力デバイスが現在の音声形式(" + str(self.sample_rate_menu.num) + "Hz/16bit/" + self.entry_text4.get() + "チャンネル)に対応していません。")
+        else:
+            if self.flag == 0:
+                self.flag = 1
+                self.button_text1.set("変換停止")
+                self.input_api_select.state(["disabled"])
+                self.input_device_select.state(["disabled"])
+                self.output_device_select.state(["disabled"])
+                self.device_update.state(["disabled"])
+                self.audio = pyaudio.PyAudio()
+                self.num_channels = int(self.entry_text4.get())
+                self.frame_length = 2 ** int(np.log2(self.sample_rate_menu.num) - 1) * self.num_channels
+                self.actual_length = self.num_channels * self.frame_length
+                try:
+                    if self.audio.is_format_supported(rate = self.sample_rate_menu.num,
+                                input_device = self.input_device_index_current[self.input_device_select.current()],
+                                input_channels = self.num_channels,
+                                input_format = pyaudio.paInt16):
+                        try:
+                            if self.audio.is_format_supported(rate = self.sample_rate_menu.num,
+                                    output_device = self.output_device_index_current[self.output_device_select.current()],
+                                    output_channels = self.num_channels,
+                                    output_format = pyaudio.paInt16):
+                                self.buffer = np.zeros(int(self.actual_length/8), dtype = "float64")
+                                self.stack = np.zeros(int(self.actual_length/32), dtype = "float64")
+                                self.input_mask = np.arange(0,1,32/self.actual_length).astype(np.float64)
+                                self.output_mask = np.arange(1,0,-32/self.actual_length).astype(np.float64)
+                                self.stop_flag = 0
+                                self.abort_flag = 0
+                                self.input_line = queue.Queue()
+                                self.output_line = queue.Queue()
+                                self.thread4 = threading.Thread(target = self.run4)
+                                self.thread4.start()
+                                self.thread2 = threading.Thread(target = self.run2)
+                                self.thread2.start()
+                                self.thread3 = threading.Thread(target = self.run3)
+                                self.thread3.start()
+                        except ValueError as e:
+                            if e.args[0] == "Invalid sample rate":
+                                log_insert("[エラー] 現在の周波数(" + str(self.sample_rate_menu.num) + "Hz)がOS側の周波数の設定と異なっています。\nコントロールパネル>ハードウェアとサウンド>サウンドからデバイスのプロパティを開き、周波数の設定を変更してください。")
+                            else:
+                                log_insert("[エラー] 出力デバイスが現在の音声形式(" + str(self.sample_rate_menu.num) + "Hz/16bit/" + self.entry_text4.get() + "チャンネル)に対応していません。")
+                            self.voice_change3()
+                except ValueError as e:
+                    if e.args[0] == "Invalid sample rate":
+                        log_insert("[エラー] 現在の周波数(" + str(self.sample_rate_menu.num) + "Hz)がOS側の周波数の設定と異なっています。\nコントロールパネル>ハードウェアとサウンド>サウンドからデバイスのプロパティを開き、周波数の設定を変更してください。")
+                    else:
+                        log_insert("[エラー] 入力デバイスが現在の音声形式(" + str(self.sample_rate_menu.num) + "Hz/16bit/" + self.entry_text4.get() + "チャンネル)に対応していません。")
+                    self.voice_change3()
+            else:
                 self.voice_change3()
-        elif self.flag == 1:
-            self.voice_change3()
 
     def voice_change3(self):
         self.flag = 0
@@ -1483,7 +1490,7 @@ class voice_changer:
                 self.stream.close()
             except Exception:
                 pass
-            log_insert("[info] デバイスに変更が生じたため、変換を中断しました。")
+            log_insert("[info] 変換が中断されました。")
             self.voice_change3()
         while self.stop_flag == 0:
             time.sleep(0.01)
@@ -1510,7 +1517,8 @@ class voice_changer:
                 else:
                     self.spec_mat, self.aperiod_mat, self.f0 = self.voice_convert(self.process_data)
                     self.new_f0 = self.freq_convert(self.f0)
-                    self.out_data = pw.synthesize(self.new_f0, self.spec_mat, self.aperiod_mat, self.sample_rate_menu.num) * self.volume_menu.num                self.write_data = self.out_data[2 * int(len(self.out_data)/4)-int(self.actual_length * (33/64)):2 * int(len(self.out_data)/4)+int(self.actual_length * (33/64))]
+                    self.out_data = pw.synthesize(self.new_f0, self.spec_mat, self.aperiod_mat, self.sample_rate_menu.num) * self.volume_menu.num
+                self.write_data = self.out_data[2 * int(len(self.out_data)/4)-int(self.actual_length * (33/64)):2 * int(len(self.out_data)/4)+int(self.actual_length * (33/64))]
                 self.result = np.concatenate([self.stack * self.output_mask + self.write_data[:int(self.actual_length/32)] * self.input_mask, self.write_data[int(self.actual_length/32):self.actual_length]])
                 self.stack = self.write_data[self.actual_length:]
                 self.output_line.put((self.result * 32768.0).astype(np.int16))
@@ -1653,6 +1661,7 @@ class voice_changer:
         self.file_convert_button.state(["!disabled"])
 
     def save_values(self):
+        app.abort_flag = 1
         self.confirm_window = Toplevel(root)
         self.confirm_window.title("終了の確認")
         self.confirm_window.wm_attributes("-toolwindow", "True")
@@ -1745,7 +1754,6 @@ if path.isfile(path.dirname(sys.argv[0]) + "\\" + "Latest.json"):
             app.rightwindow2.estimated_spec = load_data["estimated_spec"]
             if load_data["file_for_convert"] != "":
                 if path.isfile(load_data["file_for_convert"]):
-                    app.file_open_button.file_path = load_data["file_for_convert"]
                     app.file_open_button.file_read1(load_data["file_for_convert"])
                 else:
                     log_insert("[警告] ファイル" + load_data["file_for_convert"] + "が見つかりませんでした。")
